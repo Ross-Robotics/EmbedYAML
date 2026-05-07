@@ -201,7 +201,11 @@ public:
      */
     Node& operator[](const std::string& key)
     {
-        assert(isMap() && "Node is not a Map");
+        if (!isMap()) {
+            static Node null_node(NodeType::Null);
+            null_node = Node(NodeType::Null);
+            return null_node;
+        }
         auto& map = std::get<MapType>(value);
         for (auto& entry : map)
         {
@@ -225,9 +229,17 @@ public:
      */
     Node& operator[](size_t index)
     {
-        assert(isSequence() && "Node is not a Sequence");
+        if (!isSequence()) {
+            static Node null_node(NodeType::Null);
+            null_node = Node(NodeType::Null);
+            return null_node;
+        }
         auto& seq = std::get<SequenceType>(value);
-        assert(index < seq.size() && "Index out of range");
+        if (index >= seq.size()) {
+            static Node null_node(NodeType::Null);
+            null_node = Node(NodeType::Null);
+            return null_node;
+        }
         return *seq[index];
     }
 
