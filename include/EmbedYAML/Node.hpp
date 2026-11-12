@@ -146,6 +146,17 @@ public:
     bool isMap() const { return type == NodeType::Map; }
 
     /**
+     * @brief Retrieves the entries in a map node.
+     * @return A pointer to the entries, or nullptr if this node is not a map.
+     */
+    const MapType* mapEntries() const
+    {
+        if (isMap())
+            return &std::get<MapType>(value);
+        return nullptr;
+    }
+
+    /**
      * @brief Retrieves the type of the Node.
      * @return The NodeType representing the type of the Node.
      */
@@ -201,7 +212,8 @@ public:
      */
     Node& operator[](const std::string& key)
     {
-        if (!isMap()) {
+        if (!isMap())
+        {
             static Node null_node(NodeType::Null);
             null_node = Node(NodeType::Null);
             return null_node;
@@ -229,13 +241,15 @@ public:
      */
     Node& operator[](size_t index)
     {
-        if (!isSequence()) {
+        if (!isSequence())
+        {
             static Node null_node(NodeType::Null);
             null_node = Node(NodeType::Null);
             return null_node;
         }
         auto& seq = std::get<SequenceType>(value);
-        if (index >= seq.size()) {
+        if (index >= seq.size())
+        {
             static Node null_node(NodeType::Null);
             null_node = Node(NodeType::Null);
             return null_node;
