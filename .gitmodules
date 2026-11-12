@@ -1,3 +1,3 @@
 [submodule "external/libyaml"]
 	path = external/libyaml
-	url = https://github.com/joeinman/libyaml
+	url = https://github.com/Ross-Robotics/libyaml.git
