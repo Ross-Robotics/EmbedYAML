@@ -9,8 +9,98 @@
  */
 
 #include <memory>
+#include <string_view>
 #include <utility>
 #include "EmbedYAML/EmbedYAML.hpp"
+
+namespace
+{
+
+constexpr size_t maxImplicitYamlKeyLength = 1024;
+
+std::string quoteYamlScalar(const std::string_view scalar)
+{
+    constexpr char hex[] = "0123456789ABCDEF";
+
+    std::string output;
+    output.reserve(scalar.size() + 2);
+    output += '"';
+    for (size_t index = 0; index < scalar.size(); ++index)
+    {
+        const auto character = static_cast<unsigned char>(scalar[index]);
+
+        // U+0080 through U+009F are encoded as C2 80 through C2 9F.  They
+        // cannot be emitted literally: U+0080 is not YAML-printable, and
+        // YAML treats U+0085 as a line break.  Check the complete UTF-8
+        // sequence so continuation bytes belonging to other code points are
+        // left untouched.
+        if (character == 0xc2 && index + 1 < scalar.size())
+        {
+            const auto next = static_cast<unsigned char>(scalar[index + 1]);
+            if (next >= 0x80 && next <= 0x9f)
+            {
+                output += "\\x";
+                output += hex[next >> 4];
+                output += hex[next & 0x0f];
+                ++index;
+                continue;
+            }
+        }
+
+        switch (character)
+        {
+        case '\0':
+            output += "\\0";
+            break;
+        case '\a':
+            output += "\\a";
+            break;
+        case '\b':
+            output += "\\b";
+            break;
+        case '\t':
+            output += "\\t";
+            break;
+        case '\n':
+            output += "\\n";
+            break;
+        case '\v':
+            output += "\\v";
+            break;
+        case '\f':
+            output += "\\f";
+            break;
+        case '\r':
+            output += "\\r";
+            break;
+        case 0x1b:
+            output += "\\e";
+            break;
+        case '"':
+            output += "\\\"";
+            break;
+        case '\\':
+            output += "\\\\";
+            break;
+        default:
+            if (character < 0x20 || character == 0x7f)
+            {
+                output += "\\x";
+                output += hex[character >> 4];
+                output += hex[character & 0x0f];
+            }
+            else
+            {
+                output += static_cast<char>(character);
+            }
+            break;
+        }
+    }
+    output += '"';
+    return output;
+}
+
+}  // namespace
 
 namespace EmbedYAML
 {
@@ -229,7 +319,7 @@ std::expected<std::string, EmbedYAMLError> EmbedYAML::emitScalar(const Node& nod
     auto optScalar = node.asString();
     if (!optScalar.has_value())
         return std::unexpected(EmbedYAMLError{EmbedYAMLErrorType::EmissionError, "Invalid scalar node"});
-    return optScalar.value();
+    return quoteYamlScalar(optScalar.value());
 }
 
 std::expected<std::string, EmbedYAMLError> EmbedYAML::emitSequence(const Node&      node,
@@ -271,10 +361,16 @@ std::expected<std::string, EmbedYAMLError> EmbedYAML::emitMapping(const Node&   
             entry.value->isScalar() ? self->emitNode(*entry.value, 0) : self->emitNode(*entry.value, indentLevel + 1);
         if (!res.has_value())
             return std::unexpected(EmbedYAMLError{EmbedYAMLErrorType::EmissionError, "Failed to emit mapping element"});
-        if (entry.value->isScalar())
-            output += indent + entry.key + ": " + res.value() + "\n";
+        const std::string key = quoteYamlScalar(entry.key);
+        if (key.size() > maxImplicitYamlKeyLength)
+        {
+            output += indent + "? " + key + "\n" + indent + ":";
+            output += entry.value->isScalar() ? " " + res.value() + "\n" : "\n" + res.value();
+        }
+        else if (entry.value->isScalar())
+            output += indent + key + ": " + res.value() + "\n";
         else
-            output += indent + entry.key + ":\n" + res.value();
+            output += indent + key + ":\n" + res.value();
     }
     return output;
 }
