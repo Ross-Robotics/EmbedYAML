@@ -23,8 +23,28 @@ std::string quoteYamlScalar(const std::string_view scalar)
     std::string output;
     output.reserve(scalar.size() + 2);
     output += '"';
-    for (const unsigned char character : scalar)
+    for (size_t index = 0; index < scalar.size(); ++index)
     {
+        const auto character = static_cast<unsigned char>(scalar[index]);
+
+        // U+0080 through U+009F are encoded as C2 80 through C2 9F.  They
+        // cannot be emitted literally: U+0080 is not YAML-printable, and
+        // YAML treats U+0085 as a line break.  Check the complete UTF-8
+        // sequence so continuation bytes belonging to other code points are
+        // left untouched.
+        if (character == 0xc2 && index + 1 < scalar.size())
+        {
+            const auto next = static_cast<unsigned char>(scalar[index + 1]);
+            if (next >= 0x80 && next <= 0x9f)
+            {
+                output += "\\x";
+                output += hex[next >> 4];
+                output += hex[next & 0x0f];
+                ++index;
+                continue;
+            }
+        }
+
         switch (character)
         {
         case '\0':
