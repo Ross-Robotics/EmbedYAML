@@ -9,8 +9,76 @@
  */
 
 #include <memory>
+#include <string_view>
 #include <utility>
 #include "EmbedYAML/EmbedYAML.hpp"
+
+namespace
+{
+
+std::string quoteYamlScalar(const std::string_view scalar)
+{
+    constexpr char hex[] = "0123456789ABCDEF";
+
+    std::string output;
+    output.reserve(scalar.size() + 2);
+    output += '"';
+    for (const unsigned char character : scalar)
+    {
+        switch (character)
+        {
+        case '\0':
+            output += "\\0";
+            break;
+        case '\a':
+            output += "\\a";
+            break;
+        case '\b':
+            output += "\\b";
+            break;
+        case '\t':
+            output += "\\t";
+            break;
+        case '\n':
+            output += "\\n";
+            break;
+        case '\v':
+            output += "\\v";
+            break;
+        case '\f':
+            output += "\\f";
+            break;
+        case '\r':
+            output += "\\r";
+            break;
+        case 0x1b:
+            output += "\\e";
+            break;
+        case '"':
+            output += "\\\"";
+            break;
+        case '\\':
+            output += "\\\\";
+            break;
+        default:
+            if (character < 0x20 || character == 0x7f)
+            {
+                output += "\\x";
+                output += hex[character >> 4];
+                output += hex[character & 0x0f];
+            }
+            else
+            {
+                output += static_cast<char>(character);
+            }
+            break;
+        }
+    }
+    output += '"';
+    return output;
+}
+
+}  // namespace
 
 namespace EmbedYAML
 {
@@ -229,7 +297,7 @@ std::expected<std::string, EmbedYAMLError> EmbedYAML::emitScalar(const Node& nod
     auto optScalar = node.asString();
     if (!optScalar.has_value())
         return std::unexpected(EmbedYAMLError{EmbedYAMLErrorType::EmissionError, "Invalid scalar node"});
-    return optScalar.value();
+    return quoteYamlScalar(optScalar.value());
 }
 
 std::expected<std::string, EmbedYAMLError> EmbedYAML::emitSequence(const Node&      node,
@@ -271,10 +339,11 @@ std::expected<std::string, EmbedYAMLError> EmbedYAML::emitMapping(const Node&   
             entry.value->isScalar() ? self->emitNode(*entry.value, 0) : self->emitNode(*entry.value, indentLevel + 1);
         if (!res.has_value())
             return std::unexpected(EmbedYAMLError{EmbedYAMLErrorType::EmissionError, "Failed to emit mapping element"});
+        const std::string key = quoteYamlScalar(entry.key);
         if (entry.value->isScalar())
-            output += indent + entry.key + ": " + res.value() + "\n";
+            output += indent + key + ": " + res.value() + "\n";
         else
-            output += indent + entry.key + ":\n" + res.value();
+            output += indent + key + ":\n" + res.value();
     }
     return output;
 }
