@@ -16,6 +16,8 @@
 namespace
 {
 
+constexpr size_t maxImplicitYamlKeyLength = 1024;
+
 std::string quoteYamlScalar(const std::string_view scalar)
 {
     constexpr char hex[] = "0123456789ABCDEF";
@@ -360,7 +362,12 @@ std::expected<std::string, EmbedYAMLError> EmbedYAML::emitMapping(const Node&   
         if (!res.has_value())
             return std::unexpected(EmbedYAMLError{EmbedYAMLErrorType::EmissionError, "Failed to emit mapping element"});
         const std::string key = quoteYamlScalar(entry.key);
-        if (entry.value->isScalar())
+        if (key.size() > maxImplicitYamlKeyLength)
+        {
+            output += indent + "? " + key + "\n" + indent + ":";
+            output += entry.value->isScalar() ? " " + res.value() + "\n" : "\n" + res.value();
+        }
+        else if (entry.value->isScalar())
             output += indent + key + ": " + res.value() + "\n";
         else
             output += indent + key + ":\n" + res.value();

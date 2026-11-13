@@ -40,22 +40,28 @@ int main()
     auto                 document = yaml.parse("software:\n  node_id: 3\n");
     assert(document.has_value());
 
-    const std::string injected_value            = "3\noutside_software: changed # comment\\\"\\\\\t";
-    const std::string injected_key              = "outside:\nsoftware";
-    const std::string unicode_controls          = "before\xC2\x80"
-                                                  "middle\xC2\x85"
-                                                  "after";
-    const std::string unicode_key               = "key\xC2\x85"
-                                                  "name";
+    const std::string injected_value   = "3\noutside_software: changed # comment\\\"\\\\\t";
+    const std::string injected_key     = "outside:\nsoftware";
+    const std::string unicode_controls = "before\xC2\x80"
+                                         "middle\xC2\x85"
+                                         "after";
+    const std::string unicode_key      = "key\xC2\x85"
+                                         "name";
+    const std::string oversized_key(1023, 'a');
+    const std::string escaped_oversized_key     = std::string(1021, 'b') + '\n';
     (*document)["software"]["node_id"]          = injected_value;
     (*document)[injected_key]                   = injected_value;
     (*document)["software"]["unicode_controls"] = unicode_controls;
     (*document)[unicode_key]                    = unicode_controls;
+    (*document)[oversized_key]                  = "oversized";
+    (*document)[escaped_oversized_key]          = "escaped oversized";
 
     const auto emitted = yaml.emit(*document);
     assert(emitted.has_value());
     assert(emitted->find("\\x80") != std::string::npos);
     assert(emitted->find("\\x85") != std::string::npos);
+    assert(emitted->find("? \"" + oversized_key + "\"\n: ") != std::string::npos);
+    assert(emitted->find("? \"" + std::string(1021, 'b') + "\\n\"\n: ") != std::string::npos);
 
     const auto reparsed = yaml.parse(*emitted);
     assert(reparsed.has_value());
@@ -65,5 +71,7 @@ int main()
     assertScalarEquals(findMappingValue(*software, "unicode_controls"), unicode_controls);
     assertScalarEquals(findMappingValue(*reparsed, injected_key), injected_value);
     assertScalarEquals(findMappingValue(*reparsed, unicode_key), unicode_controls);
+    assertScalarEquals(findMappingValue(*reparsed, oversized_key), "oversized");
+    assertScalarEquals(findMappingValue(*reparsed, escaped_oversized_key), "escaped oversized");
     assert(findMappingValue(*reparsed, "outside_software") == nullptr);
 }
